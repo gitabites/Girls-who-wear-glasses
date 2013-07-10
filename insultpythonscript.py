@@ -2,6 +2,7 @@
 
 import pandas as pd
 import numpy as np 
+import matplotlib.pyplot as plt
 
 
 
@@ -19,14 +20,19 @@ def main():
 	text_features_ng = vectorizer.fit_transform(biginsult['Comment'])
 	text_features_ng.shape
 
-#split biginsult back into test and train 
+#split biginsult back into test and train; name insult and comment objects 
 	new_train = biginsult[:3947]
 	new_test = biginsult[3947:]
+	insult_train = new_train['Insult'].astype('int')
+	comment_train = new_train['Comment']
+	insult_test = new_test['Insult'].astype('int')
+	comment_test = new_test['Comment']
+
 
 #train NB classifier to predict insultness of post in Naive Bayes
 	from sklearn.naive_bayes import MultinomialNB
 	X = text_features_ng[:3947]
-	Y = np.array(new_train['Insult'])	
+	Y = np.array(insult_train)	
 	clf = MultinomialNB()
 	model_insult = clf.fit(X, Y)
 
@@ -35,29 +41,32 @@ def main():
 	cross_val_score(model_insult, X.toarray(), Y)	
 	model_insult.fit(X.toarray(), Y)
 
+#predict on train
+	from sklearn import metrics
+	from sklearn.metrics import auc_score
+	metrics.confusion_matrix(insult_train, model_insult.predict(X))
+	insult_train_predict = model_insult.predict_proba(X)
+
+#get AUC 
+	metrics.auc_score(insult_train, insult_train_predict[:,1])
+
 #vectorize test data
-	text_features_test_ng = vectorizer.transform(new_test['Comment'])
+	X_test = vectorizer.transform(comment_test)
 
 #predict on test sdata (my question is should a value go into predict proba, eg 1 for insult? or should the whole Y go in?)
 	predicted_insult = model_insult.predict(text_features_test_ng)
 	probs = model_insult.predict_proba(text_features_test_ng)
-#get AUC #can't get this to work
-#from sklearn.metrics import auc_score
-#insults = np.array(new_test['Insult'])
-#scores = []
-#scores.append(auc_score(insultf, probs[:, 1]), pos_label=1)
-#print("score: %f" % scores[-1])
 
-#zip together ids and insult probabilities for comment, insult
-	iden = new_test['Insult']
-	probs = model_insult.predict_proba(text_features_test_ng)
-	columns = ['ID', 'Insult Prob']
-	submission = pd.DataFrame(iden, probs, columns=columns)
-	
-	
-	for id, insult in zip(comment, predicted_insult):
-		print '%r => %s' % (id, )
-
+#make new probability column in test_data 
+	probsadd = probs[:,0]
+	test_data['Prob Insult'] = probsadd
+#make new submission dataframe	
+	submission = test_data.set_index(['Insult'])
+	del submission['Date']
+	del submission['Comment']
+	del submission['ID']
+#write submission to csv
+	submission.to_csv('How Insulting', header=True)
 
 if __name__=="__main__":
     main()
